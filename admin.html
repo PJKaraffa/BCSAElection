@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BCSA Election Administrator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>BCSA Election Administration</h1>
+      <p>Authorized administrators only</p>
+    </div>
+    <a class="admin-link" href="index.html">Voter Page</a>
+  </header>
+
+  <main class="page-shell">
+    <section class="card" id="adminLoginCard">
+      <h2>Administrator Login</h2>
+      <div class="form-grid two-column">
+        <label>Email<input id="adminEmail" type="email" autocomplete="username"></label>
+        <label>Password<input id="adminPassword" type="password" autocomplete="current-password"></label>
+      </div>
+      <button id="adminLoginButton" class="primary-button" type="button">Sign In</button>
+      <p id="adminLoginMessage" class="message"></p>
+    </section>
+
+    <section id="adminApp" class="hidden">
+      <div class="admin-toolbar">
+        <div>
+          <h2>Administrator Dashboard</h2>
+          <p id="adminWelcome"></p>
+        </div>
+        <button id="logoutButton" class="secondary-button" type="button">Logout</button>
+      </div>
+
+      <section class="metrics-grid">
+        <article class="metric-card"><span>Eligible IDs</span><strong id="eligibleCount">0</strong></article>
+        <article class="metric-card"><span>Votes Cast</span><strong id="votesCastCount">0</strong></article>
+        <article class="metric-card"><span>Turnout</span><strong id="turnoutPercent">0%</strong></article>
+        <article class="metric-card"><span>Status</span><strong id="adminElectionStatus">—</strong></article>
+      </section>
+
+      <section class="card">
+        <div class="section-heading">
+          <div><h2>Election Settings</h2><p>Create or update the active election.</p></div>
+          <button id="saveElectionButton" class="primary-button" type="button">Save Election</button>
+        </div>
+        <div class="form-grid two-column">
+          <label>Election Title<input id="electionNameInput" type="text" value="BCSA Executive Board Election 2027"></label>
+          <label>Status<select id="electionStatusInput"><option value="draft">Draft</option><option value="open">Open</option><option value="closed">Closed</option></select></label>
+          <label>Start Date and Time<input id="electionStartInput" type="datetime-local"></label>
+          <label>End Date and Time<input id="electionEndInput" type="datetime-local"></label>
+        </div>
+        <p id="electionSaveMessage" class="message"></p>
+      </section>
+
+      <section class="card">
+        <h2>Import Eligible Member IDs</h2>
+        <p>Upload a CSV with one column named <strong>member_id</strong>. IDs are hashed before storage.</p>
+        <div class="inline-form">
+          <input id="memberCsv" type="file" accept=".csv,text/csv">
+          <button id="importMembersButton" class="primary-button" type="button">Import IDs</button>
+        </div>
+        <p id="memberImportMessage" class="message"></p>
+      </section>
+
+      <section class="card">
+        <div class="section-heading">
+          <div><h2>Candidates</h2><p>Add candidates to each office.</p></div>
+          <button id="addCandidateButton" class="primary-button" type="button">Add Candidate</button>
+        </div>
+        <div class="form-grid three-column">
+          <label>Position<select id="candidatePosition"></select></label>
+          <label>Candidate Name<input id="candidateName" type="text"></label>
+          <label>Display Order<input id="candidateOrder" type="number" min="1" value="1"></label>
+        </div>
+        <div id="candidateList" class="admin-list"></div>
+        <p id="candidateMessage" class="message"></p>
+      </section>
+
+      <section class="card">
+        <div class="section-heading">
+          <div><h2>Election Results</h2><p>Results are displayed only after the election is closed.</p></div>
+          <button id="refreshAdminButton" class="secondary-button" type="button">Refresh</button>
+        </div>
+        <div id="resultsArea"></div>
+      </section>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

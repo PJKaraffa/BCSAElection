@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BCSA Anonymous Election</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>BCSA Anonymous Voting</h1>
+      <p>Executive Board Election</p>
+    </div>
+    <a class="admin-link" href="admin.html">Administrator</a>
+  </header>
+
+  <main class="page-shell">
+    <section class="hero-card">
+      <div>
+        <span class="status-pill" id="electionStatus">Checking election…</span>
+        <h2 id="electionTitle">BCSA Executive Board Election</h2>
+        <p id="electionDates"></p>
+      </div>
+      <div class="secure-note">Your ID confirms eligibility only. It is not stored with your ballot.</div>
+    </section>
+
+    <section class="card" id="verifyCard">
+      <h2>Enter Your Member ID</h2>
+      <p>Use the ID provided by BCSA. Each eligible ID can submit one ballot.</p>
+      <div class="inline-form">
+        <input id="memberId" type="password" inputmode="numeric" autocomplete="off" placeholder="Member ID">
+        <button id="verifyButton" class="primary-button" type="button">Verify ID</button>
+      </div>
+      <p id="verifyMessage" class="message" aria-live="polite"></p>
+    </section>
+
+    <section class="card hidden" id="ballotCard">
+      <div class="section-heading">
+        <div>
+          <h2>Cast Your Anonymous Ballot</h2>
+          <p>Select the allowed number of candidates for each position.</p>
+        </div>
+        <button id="clearButton" class="secondary-button" type="button">Clear Selections</button>
+      </div>
+
+      <div id="ballotPositions"></div>
+
+      <div class="submit-area">
+        <label class="review-check">
+          <input id="confirmReview" type="checkbox">
+          <span>I reviewed my selections and understand they cannot be changed after submission.</span>
+        </label>
+        <button id="submitButton" class="submit-button" type="button" disabled>Submit Ballot Anonymously</button>
+        <p id="submitMessage" class="message" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section class="card success-card hidden" id="successCard">
+      <div class="success-icon">✓</div>
+      <h2>Thank You</h2>
+      <p>Your anonymous ballot has been recorded.</p>
+      <p class="receipt-label">Confirmation Number</p>
+      <div id="confirmationNumber" class="confirmation-number"></div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
