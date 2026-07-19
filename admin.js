@@ -1,6 +1,7 @@
 let adminUser = null;
 let election = null;
 let positions = [];
+let liveResultsTimer = null;
 const $ = (id) => document.getElementById(id);
 
 document.addEventListener("DOMContentLoaded", initializeAdmin);
@@ -35,6 +36,14 @@ async function openAdminApp(user) {
   $("adminApp").classList.remove("hidden");
   $("adminWelcome").textContent = profile.full_name || user.email;
   await loadDashboard();
+  startLiveResults();
+}
+
+function startLiveResults() {
+  clearInterval(liveResultsTimer);
+  liveResultsTimer = setInterval(() => {
+    if (adminUser && !document.hidden) loadDashboard(true);
+  }, 5000);
 }
 
 async function logoutAdmin() {
@@ -42,9 +51,12 @@ async function logoutAdmin() {
   location.reload();
 }
 
-async function loadDashboard() {
+async function loadDashboard(silent = false) {
   const { data, error } = await supabaseClient.rpc("get_admin_dashboard");
-  if (error) return alert(error.message);
+  if (error) {
+    if (!silent) alert(error.message);
+    return;
+  }
   election = data.election;
   positions = data.positions || [];
   renderMetrics(data.metrics || {});
@@ -135,17 +147,63 @@ async function importMemberIds() {
 }
 
 function renderResults(results) {
-  if (!election || election.status !== "closed") {
-    $("resultsArea").innerHTML = "<p>Close the election to display results.</p>";
+  if (!election) {
+    $("resultsArea").innerHTML = "<p>Create an election to view results.</p>";
     return;
   }
-  const grouped = Object.groupBy ? Object.groupBy(results, (r) => r.position_name) : results.reduce((a,r)=>((a[r.position_name] ||= []).push(r),a),{});
-  $("resultsArea").innerHTML = Object.entries(grouped).map(([position, rows]) => {
-    const max = Math.max(...rows.map((r) => Number(r.vote_count)), 1);
-    return `<div class="result-group"><h3>${escapeHtml(position)}</h3>${rows.map((r) => `
-      <div class="result-row"><strong>${escapeHtml(r.candidate_name)}</strong><div class="result-bar"><div style="width:${(Number(r.vote_count)/max)*100}%"></div></div><span>${r.vote_count}</span></div>
-    `).join("")}</div>`;
-  }).join("") || "<p>No ballots were cast.</p>";
+
+  const grouped = Object.groupBy
+    ? Object.groupBy(results, (r) => r.position_name)
+    : results.reduce((a, r) => ((a[r.position_name] ||= []).push(r), a), {});
+
+  const statusLabel = election.status === "closed" ? "Final Results" : "Live Results";
+  const statusClass = election.status === "closed" ? "final" : "live";
+
+  const header = `
+    <div class="live-results-banner ${statusClass}">
+      <div>
+        <strong>${statusLabel}</strong>
+        <span>${election.status === "closed" ? "Winners are final." : "Administrator-only results update every 5 seconds."}</span>
+      </div>
+      <span class="live-dot"></span>
+    </div>`;
+
+  const body = Object.entries(grouped).map(([positionName, rows]) => {
+    const position = positions.find((p) => p.name === positionName);
+    const seats = Number(position?.max_selections || 1);
+    const sorted = [...rows].sort((a, b) => Number(b.vote_count) - Number(a.vote_count));
+    const maxVotes = Math.max(...sorted.map((r) => Number(r.vote_count)), 1);
+    const cutoffVotes = Number(sorted[Math.min(seats, sorted.length) - 1]?.vote_count || 0);
+
+    return `<div class="result-group">
+      <div class="result-group-heading">
+        <h3>${escapeHtml(positionName)}</h3>
+        <span>${seats} ${seats === 1 ? "seat" : "seats"}</span>
+      </div>
+      ${sorted.map((r, index) => {
+        const votes = Number(r.vote_count || 0);
+        const isLeader = index < seats && votes >= cutoffVotes;
+        const badgeText = election.status === "closed" ? "WINNER" : "LEADING";
+        const percent = Number($("votesCastCount").textContent || 0) > 0
+          ? Math.round((votes / Number($("votesCastCount").textContent)) * 100)
+          : 0;
+
+        return `
+          <div class="result-row ${isLeader ? "result-winner" : ""}">
+            <div class="result-candidate">
+              <strong>${escapeHtml(r.candidate_name)}</strong>
+              ${isLeader ? `<span class="winner-badge">${badgeText}</span>` : ""}
+            </div>
+            <div class="result-bar" aria-label="${votes} votes">
+              <div class="${isLeader ? "winner-fill" : ""}" style="width:${(votes / maxVotes) * 100}%"></div>
+            </div>
+            <span class="result-total">${votes} <small>${percent}%</small></span>
+          </div>`;
+      }).join("")}
+    </div>`;
+  }).join("");
+
+  $("resultsArea").innerHTML = header + (body || "<p>No ballots were cast.</p>");
 }
 
 function toLocalInput(value) { if (!value) return ""; const d = new Date(value); const offset = d.getTimezoneOffset(); return new Date(d.getTime()-offset*60000).toISOString().slice(0,16); }
