@@ -38,8 +38,22 @@
       <section class="metrics-grid">
         <article class="metric-card"><span>Eligible IDs</span><strong id="eligibleCount">0</strong></article>
         <article class="metric-card"><span>Votes Cast</span><strong id="votesCastCount">0</strong></article>
+        <article class="metric-card"><span>Remaining</span><strong id="remainingCount">0</strong></article>
         <article class="metric-card"><span>Turnout</span><strong id="turnoutPercent">0%</strong></article>
         <article class="metric-card"><span>Status</span><strong id="adminElectionStatus">—</strong></article>
+      </section>
+
+      <section class="card turnout-card">
+        <div class="turnout-heading">
+          <div>
+            <span class="eyebrow">Election progress</span>
+            <strong id="turnoutProgressText">0 of 0 eligible IDs have voted</strong>
+          </div>
+          <span id="liveElectionBadge" class="live-election-badge inactive">Election Not Open</span>
+        </div>
+        <div class="turnout-progress" role="progressbar" aria-label="Election turnout" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div id="turnoutProgressBar"></div>
+        </div>
       </section>
 
       <section class="card">
@@ -80,10 +94,16 @@
         <p id="candidateMessage" class="message"></p>
       </section>
 
-      <section class="card">
-        <div class="section-heading">
-          <div><h2>Election Results</h2><p>Live results are visible to administrators throughout the election.</p></div>
-          <button id="refreshAdminButton" class="secondary-button" type="button">Refresh</button>
+      <section class="card results-card">
+        <div class="section-heading results-heading">
+          <div>
+            <h2>Election Results</h2>
+            <p id="resultsExplanation">Live results are visible to administrators throughout the election.</p>
+          </div>
+          <div class="live-controls">
+            <span id="liveUpdateStatus" class="live-update-status live">Live</span>
+            <button id="refreshAdminButton" class="secondary-button" type="button">Refresh Now</button>
+          </div>
         </div>
         <div id="resultsArea"></div>
       </section>
