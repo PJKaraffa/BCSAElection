@@ -1,149 +1,210 @@
-let activeElection = null;
+let publicElection = null;
 let ballotPositions = [];
-let verifiedToken = null;
-
+let verificationToken = null;
+const selectedCandidates = new Map();
 const $ = (id) => document.getElementById(id);
 
-document.addEventListener("DOMContentLoaded", initializeVoterPage);
+document.addEventListener("DOMContentLoaded", initializeVotingPage);
 
-async function initializeVoterPage() {
+async function initializeVotingPage() {
   $("verifyButton").addEventListener("click", verifyMemberId);
   $("memberId").addEventListener("keydown", (event) => {
     if (event.key === "Enter") verifyMemberId();
   });
   $("clearButton").addEventListener("click", clearSelections);
-  $("confirmReview").addEventListener("change", updateSubmitButton);
+  $("confirmReview").addEventListener("change", updateSubmitState);
   $("submitButton").addEventListener("click", submitBallot);
-  await loadActiveElection();
+  await loadElection();
 }
 
-async function loadActiveElection() {
+async function loadElection() {
+  setMessage("verifyMessage", "", "");
   const { data, error } = await supabaseClient.rpc("get_public_election");
-  if (error || !data?.election) {
-    $("electionStatus").textContent = "No Open Election";
-    $("electionTitle").textContent = "Voting is not currently available";
-    $("electionDates").textContent = "Please check back during the official voting period.";
-    $("verifyButton").disabled = true;
+
+  if (error) {
+    $("electionStatus").textContent = "Unable to load election";
+    setMessage("verifyMessage", error.message, "error");
     return;
   }
 
-  activeElection = data.election;
-  ballotPositions = data.positions || [];
-  $("electionStatus").textContent = "Open";
-  $("electionTitle").textContent = activeElection.title;
-  $("electionDates").textContent = `${formatDate(activeElection.starts_at)} – ${formatDate(activeElection.ends_at)}`;
+  publicElection = data?.election || null;
+  ballotPositions = data?.positions || [];
+
+  if (!publicElection) {
+    $("electionStatus").textContent = "No election open";
+    $("electionTitle").textContent = "BCSA Election";
+    $("electionDates").textContent = "Please check again after the election opens.";
+    $("verifyButton").disabled = true;
+    $("memberId").disabled = true;
+    return;
+  }
+
+  $("electionStatus").textContent = "Election Open";
+  $("electionTitle").textContent = publicElection.title;
+  $("electionDates").textContent = `${formatDate(publicElection.starts_at)} through ${formatDate(publicElection.ends_at)}`;
+  $("verifyButton").disabled = false;
+  $("memberId").disabled = false;
 }
 
 async function verifyMemberId() {
-  const memberId = $("memberId").value.trim();
-  setMessage("verifyMessage", "", "");
-  if (!memberId) return setMessage("verifyMessage", "Enter your member ID.", "error");
-  if (!activeElection) return setMessage("verifyMessage", "There is no open election.", "error");
+  if (!publicElection) return;
 
-  $("verifyButton").disabled = true;
+  const memberId = $("memberId").value.trim();
+  if (!memberId) return setMessage("verifyMessage", "Enter your member ID.", "error");
+
+  setVerifyLoading(true);
+  setMessage("verifyMessage", "Checking eligibility…", "");
+
   const { data, error } = await supabaseClient.rpc("verify_voter", {
-    p_election_id: activeElection.id,
+    p_election_id: publicElection.id,
     p_member_id: memberId
   });
-  $("verifyButton").disabled = false;
 
-  if (error || !data?.valid) {
-    return setMessage("verifyMessage", data?.message || "That ID is invalid or has already voted.", "error");
-  }
+  setVerifyLoading(false);
 
-  verifiedToken = data.token;
+  if (error) return setMessage("verifyMessage", error.message, "error");
+  if (!data?.valid) return setMessage("verifyMessage", data?.message || "That ID could not be verified.", "error");
+
+  verificationToken = data.token;
   $("memberId").value = "";
   $("verifyCard").classList.add("hidden");
-  renderBallot();
   $("ballotCard").classList.remove("hidden");
+  renderBallot();
+  window.scrollTo({ top: $("ballotCard").offsetTop - 20, behavior: "smooth" });
 }
 
 function renderBallot() {
-  const container = $("ballotPositions");
-  container.innerHTML = ballotPositions.map((position) => `
-    <section class="position-block" data-position-id="${position.id}" data-max="${position.max_selections}">
-      <div class="position-header">
-        <h3>${escapeHtml(position.name)}</h3>
-        <span class="position-counter">Select ${position.max_selections}</span>
-      </div>
-      <div class="candidate-grid">
-        ${(position.candidates || []).map((candidate) => `
-          <div class="candidate-choice">
-            <input type="checkbox" id="candidate-${candidate.id}" value="${candidate.id}">
-            <label for="candidate-${candidate.id}">${escapeHtml(candidate.name)}</label>
+  selectedCandidates.clear();
+  $("confirmReview").checked = false;
+
+  $("ballotPositions").innerHTML = ballotPositions.map((position) => {
+    const seats = Number(position.max_selections || 1);
+    const instruction = seats === 1 ? "Select 1 candidate" : `Select exactly ${seats} candidates`;
+
+    return `
+      <section class="ballot-position" data-position-id="${position.id}">
+        <div class="ballot-position-heading">
+          <div>
+            <h3>${escapeHtml(position.name)}</h3>
+            <p>${instruction}</p>
           </div>
-        `).join("")}
-      </div>
-    </section>
-  `).join("");
+          <span class="selection-counter" id="counter-${position.id}">0 / ${seats}</span>
+        </div>
+        <div class="candidate-grid">
+          ${(position.candidates || []).map((candidate) => `
+            <button
+              type="button"
+              class="candidate-button"
+              data-position-id="${position.id}"
+              data-candidate-id="${candidate.id}"
+              onclick="toggleCandidate(${position.id}, ${candidate.id})"
+            >${escapeHtml(candidate.name)}</button>
+          `).join("")}
+        </div>
+      </section>
+    `;
+  }).join("");
 
-  container.querySelectorAll(".position-block").forEach((block) => {
-    block.querySelectorAll('input[type="checkbox"]').forEach((box) => {
-      box.addEventListener("change", () => enforceSelectionLimit(block));
-    });
+  updateSubmitState();
+}
+
+function toggleCandidate(positionId, candidateId) {
+  const position = ballotPositions.find((item) => Number(item.id) === Number(positionId));
+  if (!position) return;
+
+  const maximum = Number(position.max_selections || 1);
+  const chosen = selectedCandidates.get(positionId) || new Set();
+
+  if (chosen.has(candidateId)) {
+    chosen.delete(candidateId);
+  } else {
+    if (chosen.size >= maximum) return;
+    chosen.add(candidateId);
+  }
+
+  selectedCandidates.set(positionId, chosen);
+
+  document.querySelectorAll(`[data-position-id="${positionId}"][data-candidate-id]`).forEach((button) => {
+    button.classList.toggle("selected", chosen.has(Number(button.dataset.candidateId)));
   });
-}
 
-function enforceSelectionLimit(block) {
-  const max = Number(block.dataset.max);
-  const boxes = [...block.querySelectorAll('input[type="checkbox"]')];
-  const selected = boxes.filter((box) => box.checked);
-  boxes.forEach((box) => { box.disabled = selected.length >= max && !box.checked; });
-  block.querySelector(".position-counter").textContent = `${selected.length} of ${max} selected`;
-  updateSubmitButton();
+  $(`counter-${positionId}`).textContent = `${chosen.size} / ${maximum}`;
+  updateSubmitState();
 }
+window.toggleCandidate = toggleCandidate;
 
 function clearSelections() {
-  document.querySelectorAll('#ballotPositions input[type="checkbox"]').forEach((box) => {
-    box.checked = false;
-    box.disabled = false;
-  });
-  document.querySelectorAll(".position-block").forEach((block) => {
-    block.querySelector(".position-counter").textContent = `Select ${block.dataset.max}`;
+  selectedCandidates.clear();
+  document.querySelectorAll(".candidate-button.selected").forEach((button) => button.classList.remove("selected"));
+  ballotPositions.forEach((position) => {
+    $(`counter-${position.id}`).textContent = `0 / ${position.max_selections}`;
   });
   $("confirmReview").checked = false;
-  updateSubmitButton();
+  setMessage("submitMessage", "", "");
+  updateSubmitState();
 }
 
-function getSelections() {
-  return [...document.querySelectorAll(".position-block")].map((block) => ({
-    position_id: Number(block.dataset.positionId),
-    candidate_ids: [...block.querySelectorAll('input[type="checkbox"]:checked')].map((box) => Number(box.value)),
-    max: Number(block.dataset.max)
-  }));
+function ballotIsComplete() {
+  return ballotPositions.length > 0 && ballotPositions.every((position) => {
+    return (selectedCandidates.get(position.id)?.size || 0) === Number(position.max_selections);
+  });
 }
 
-function updateSubmitButton() {
-  const complete = getSelections().every((item) => item.candidate_ids.length === item.max);
-  $("submitButton").disabled = !(complete && $("confirmReview").checked && verifiedToken);
+function updateSubmitState() {
+  $("submitButton").disabled = !(verificationToken && ballotIsComplete() && $("confirmReview").checked);
 }
 
 async function submitBallot() {
-  const selections = getSelections();
-  if (!selections.every((item) => item.candidate_ids.length === item.max)) {
-    return setMessage("submitMessage", "Complete every position before submitting.", "error");
+  if (!verificationToken || !ballotIsComplete()) return;
+
+  const selections = [];
+  for (const position of ballotPositions) {
+    for (const candidateId of selectedCandidates.get(position.id) || []) {
+      selections.push({ position_id: position.id, candidate_id: candidateId });
+    }
   }
 
   $("submitButton").disabled = true;
-  const payload = selections.flatMap((item) => item.candidate_ids.map((candidateId) => ({
-    position_id: item.position_id,
-    candidate_id: candidateId
-  })));
+  $("submitButton").textContent = "Submitting…";
+  setMessage("submitMessage", "Recording your anonymous ballot…", "");
 
   const { data, error } = await supabaseClient.rpc("submit_anonymous_ballot", {
-    p_verification_token: verifiedToken,
-    p_selections: payload
+    p_verification_token: verificationToken,
+    p_selections: selections
   });
 
-  if (error || !data?.success) {
-    $("submitButton").disabled = false;
-    return setMessage("submitMessage", data?.message || error?.message || "The ballot could not be submitted.", "error");
+  $("submitButton").textContent = "Submit Ballot Anonymously";
+
+  if (error) {
+    updateSubmitState();
+    return setMessage("submitMessage", error.message, "error");
   }
 
-  verifiedToken = null;
+  if (!data?.success) {
+    updateSubmitState();
+    return setMessage("submitMessage", data?.message || "The ballot could not be submitted.", "error");
+  }
+
+  verificationToken = null;
   $("ballotCard").classList.add("hidden");
-  $("confirmationNumber").textContent = data.confirmation_number;
   $("successCard").classList.remove("hidden");
+  $("confirmationNumber").textContent = data.confirmation_number;
+  window.scrollTo({ top: $("successCard").offsetTop - 20, behavior: "smooth" });
+}
+
+function setVerifyLoading(loading) {
+  $("verifyButton").disabled = loading;
+  $("verifyButton").textContent = loading ? "Checking…" : "Verify ID";
+}
+
+function formatDate(value) {
+  return new Date(value).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
 }
 
 function setMessage(id, text, type) {
@@ -151,5 +212,13 @@ function setMessage(id, text, type) {
   element.textContent = text;
   element.className = `message ${type || ""}`;
 }
-function formatDate(value) { return new Date(value).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }); }
-function escapeHtml(value) { return String(value).replace(/[&<>'"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c])); }
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>'"]/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "'": "&#39;",
+    '"': "&quot;"
+  }[character]));
+}
