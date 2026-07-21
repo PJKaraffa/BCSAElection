@@ -208,22 +208,25 @@ button:disabled { cursor: not-allowed; opacity: .52; }
   transition: background .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease, transform .18s ease;
 }
 
-.candidate-button:hover {
-  border-color: #b7c6d8;
-  background: #e9eef5;
-  transform: translateY(-1px);
+.candidate-button{
+    background:#f2f2f2;
+    border:2px solid #d9d9d9;
+    color:#111;
+    transition:.25s;
 }
 
-.candidate-button.selected {
-  background: var(--red);
-  border-color: var(--red);
-  color: #ffffff;
-  box-shadow: 0 8px 20px rgba(229, 9, 20, .28);
+.candidate-button:hover{
+    background:#dbeafe;
+    border-color:#2563eb;
 }
 
-.candidate-button.selected:hover {
-  background: #c90711;
-  border-color: #c90711;
+.candidate-button.selected{
+    background:#c1121f !important;
+    border-color:#c1121f !important;
+    color:#fff !important;
+    font-weight:700;
+    transform:scale(1.03);
+    box-shadow:0 4px 12px rgba(193,18,31,.35);
 }
 
 /* Larger ballot confirmation checkbox */
