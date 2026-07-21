@@ -270,14 +270,31 @@ function renderResults(results) {
   const html = Object.entries(grouped).map(([positionName, rawRows]) => {
     const position = positions.find((p) => p.name === positionName);
     const seats = Number(position?.max_selections || rawRows[0]?.max_selections || 1);
+
     const rows = [...rawRows].sort((a, b) => {
       const voteDifference = Number(b.vote_count) - Number(a.vote_count);
       if (voteDifference !== 0) return voteDifference;
       return Number(a.display_order || 0) - Number(b.display_order || 0);
     });
 
-    // Highlight the top number of candidates equal to the available seats.
-    const leaderIds = new Set(rows.slice(0, seats).map((row) => String(row.candidate_id ?? row.candidate_name)));
+    /*
+      Tie-aware cutoff logic:
+      Example for two seats with totals 2, 1, 1:
+      - 2 votes is a clear winner.
+      - Both candidates with 1 vote are tied for the final seat.
+      - Neither tied candidate is falsely declared the winner.
+    */
+    const cutoffRow = rows[seats - 1];
+    const cutoffVotes = cutoffRow ? Number(cutoffRow.vote_count || 0) : 0;
+    const candidatesAboveCutoff = rows.filter(
+      (row) => Number(row.vote_count || 0) > cutoffVotes
+    );
+    const candidatesAtCutoff = rows.filter(
+      (row) => Number(row.vote_count || 0) === cutoffVotes
+    );
+    const seatsRemainingAtCutoff = Math.max(0, seats - candidatesAboveCutoff.length);
+    const hasCutoffTie =
+      cutoffVotes > 0 && candidatesAtCutoff.length > seatsRemainingAtCutoff;
 
     return `
       <section class="result-group">
@@ -285,19 +302,40 @@ function renderResults(results) {
           <h3>${escapeHtml(positionName)}</h3>
           <span>${seats} ${seats === 1 ? "seat" : "seats"}</span>
         </div>
-        ${rows.map((row) => {
+
+        ${hasCutoffTie ? `
+          <div class="tie-alert">
+            <strong>Tie detected:</strong>
+            ${candidatesAtCutoff.length} candidates are tied for
+            ${seatsRemainingAtCutoff === 1 ? "the final seat" : `${seatsRemainingAtCutoff} remaining seats`}.
+            ${isClosed ? "A runoff or approved tie-breaking procedure is required." : "The result is not yet determined."}
+          </div>
+        ` : ""}
+
+        ${rows.map((row, index) => {
           const votes = Number(row.vote_count || 0);
           const percent = totalBallots ? (votes / totalBallots) * 100 : 0;
-          const key = String(row.candidate_id ?? row.candidate_name);
-          const isLeader = leaderIds.has(key) && votes > 0;
-          const label = isClosed ? "Winner" : "Leading";
+          const isAboveCutoff = votes > cutoffVotes && votes > 0;
+          const isAtCutoff = votes === cutoffVotes && votes > 0;
+          const isTieCandidate = hasCutoffTie && isAtCutoff;
+          const isClearLeader =
+            isAboveCutoff || (!hasCutoffTie && index < seats && votes > 0);
+
+          let badge = "";
+          if (isTieCandidate) {
+            badge = isClosed ? "Tie — runoff needed" : "Tied for final seat";
+          } else if (isClearLeader) {
+            badge = isClosed ? "Winner" : "Leading";
+          }
+
+          const stateClass = isTieCandidate ? "tie" : isClearLeader ? "leader" : "";
 
           return `
-            <div class="result-candidate ${isLeader ? "leader" : ""}">
+            <div class="result-candidate ${stateClass}">
               <div class="result-candidate-topline">
                 <strong>${escapeHtml(row.candidate_name)}</strong>
                 <div class="result-candidate-stats">
-                  ${isLeader ? `<span class="leader-badge">${label}</span>` : ""}
+                  ${badge ? `<span class="${isTieCandidate ? "tie-badge" : "leader-badge"}">${badge}</span>` : ""}
                   <span>${votes} ${votes === 1 ? "vote" : "votes"} · ${percent.toFixed(1)}%</span>
                 </div>
               </div>
