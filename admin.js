@@ -4,6 +4,7 @@ let positions = [];
 let latestMetrics = {};
 let liveRefreshTimer = null;
 let dashboardLoading = false;
+let runoffCreating = false;
 const LIVE_REFRESH_MS = 5000;
 const $ = (id) => document.getElementById(id);
 
@@ -252,6 +253,51 @@ async function importMemberIds() {
   await loadDashboard();
 }
 
+
+async function createRunoffElection(sourceElectionId, positionId) {
+  if (runoffCreating) return;
+
+  const position = positions.find((item) => Number(item.id) === Number(positionId));
+  const positionName = position?.name || "this office";
+  const confirmed = confirm(
+    `Create a runoff election for ${positionName}?\n\n` +
+    "The runoff will be created as a DRAFT, include only the candidates tied at the winning cutoff, and copy the same eligible voter IDs."
+  );
+  if (!confirmed) return;
+
+  runoffCreating = true;
+  document.querySelectorAll(".create-runoff-button").forEach((button) => {
+    button.disabled = true;
+    button.textContent = "Creating Runoff…";
+  });
+
+  try {
+    const { data, error } = await supabaseClient.rpc("admin_create_runoff_election", {
+      p_source_election_id: Number(sourceElectionId),
+      p_position_id: Number(positionId)
+    });
+
+    if (error) throw error;
+
+    alert(
+      `Runoff election created successfully.\n\n` +
+      `Election: ${data.title}\n` +
+      `Office: ${data.position_name}\n` +
+      `Candidates: ${data.candidate_count}\n` +
+      `Eligible IDs copied: ${data.eligible_count}\n\n` +
+      "The new runoff is in Draft status. Set the dates and change the status to Open when ready."
+    );
+
+    await loadDashboard();
+  } catch (error) {
+    alert(error.message || "Unable to create the runoff election.");
+    console.error(error);
+  } finally {
+    runoffCreating = false;
+  }
+}
+window.createRunoffElection = createRunoffElection;
+
 function renderResults(results) {
   if (!election) {
     $("resultsArea").innerHTML = "<p>Create an election to display results.</p>";
@@ -305,10 +351,21 @@ function renderResults(results) {
 
         ${hasCutoffTie ? `
           <div class="tie-alert">
-            <strong>Tie detected:</strong>
-            ${candidatesAtCutoff.length} candidates are tied for
-            ${seatsRemainingAtCutoff === 1 ? "the final seat" : `${seatsRemainingAtCutoff} remaining seats`}.
-            ${isClosed ? "A runoff or approved tie-breaking procedure is required." : "The result is not yet determined."}
+            <div class="tie-alert-copy">
+              <strong>Tie detected:</strong>
+              ${candidatesAtCutoff.length} candidates are tied for
+              ${seatsRemainingAtCutoff === 1 ? "the final seat" : `${seatsRemainingAtCutoff} remaining seats`}.
+              ${isClosed ? "Create a runoff election or resolve the tie according to the BCSA bylaws." : "The result is not yet determined."}
+            </div>
+            ${isClosed ? `
+              <button
+                type="button"
+                class="create-runoff-button"
+                onclick="createRunoffElection(${election.id}, ${position.id})"
+              >
+                Create Runoff Election
+              </button>
+            ` : ""}
           </div>
         ` : ""}
 
