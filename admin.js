@@ -17,94 +17,65 @@ function renderMetrics(){const eligible=Number(latestMetrics.eligible_count||0),
 function populateElectionForm(){if(!election)return;$('electionNameInput').value=election.title||'';$('electionStatusInput').value=election.status;$('electionStartInput').value=toLocalInput(election.starts_at);$('electionEndInput').value=toLocalInput(election.ends_at);}
 async function newElection(){const title=prompt('Enter the new election title:','BCSA Executive Board Election');if(!title)return;const {error}=await supabaseClient.rpc('admin_create_election',{p_title:title.trim()});if(error)return alert(error.message);await loadDashboard();setMessage('electionSaveMessage','New draft election created with all five offices.','success');}
 async function saveElection() {
-  const messageId = "electionSaveMessage";
+  const messageId = 'electionSaveMessage';
 
   if (!election?.id) {
-    setMessage(
-      messageId,
-      "No election is currently loaded. Click New Election first.",
-      "error"
-    );
+    setMessage(messageId, 'No election is loaded. Click New Election first.', 'error');
     return;
   }
 
-  const title = $("electionNameInput").value.trim();
-  const status = $("electionStatusInput").value;
-  const startValue = $("electionStartInput").value;
-  const endValue = $("electionEndInput").value;
+  const title = $('electionNameInput').value.trim();
+  const status = $('electionStatusInput').value;
+  const startValue = $('electionStartInput').value;
+  const endValue = $('electionEndInput').value;
 
   if (!title) {
-    setMessage(messageId, "Enter an election title.", "error");
+    setMessage(messageId, 'Enter an election title.', 'error');
     return;
   }
 
   if (!startValue || !endValue) {
-    setMessage(messageId, "Enter both the start and end date.", "error");
+    setMessage(messageId, 'Enter both the start and end date.', 'error');
     return;
   }
 
   const startDate = new Date(startValue);
   const endDate = new Date(endValue);
 
-  if (
-    Number.isNaN(startDate.getTime()) ||
-    Number.isNaN(endDate.getTime())
-  ) {
-    setMessage(messageId, "Enter valid election dates.", "error");
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+    setMessage(messageId, 'Enter valid election dates.', 'error');
     return;
   }
 
   if (endDate <= startDate) {
-    setMessage(
-      messageId,
-      "The election end date must be after the start date.",
-      "error"
-    );
+    setMessage(messageId, 'The election end date must be after the start date.', 'error');
     return;
   }
 
-  const saveButton = $("saveElectionButton");
-  saveButton.disabled = true;
-  saveButton.textContent = "Saving…";
+  const button = $('saveElectionButton');
+  button.disabled = true;
+  button.textContent = 'Saving…';
 
   try {
-    const { data, error } = await supabaseClient.rpc(
-      "admin_save_election",
-      {
-        p_id: Number(election.id),
-        p_title: title,
-        p_status: status,
-        p_starts_at: startDate.toISOString(),
-        p_ends_at: endDate.toISOString()
-      }
-    );
+    const { data, error } = await supabaseClient.rpc('admin_save_election', {
+      p_id: Number(election.id),
+      p_title: title,
+      p_status: status,
+      p_starts_at: startDate.toISOString(),
+      p_ends_at: endDate.toISOString()
+    });
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
+    if (!data?.success) throw new Error('Supabase did not confirm that the election was saved.');
 
-    if (!data?.success) {
-      throw new Error("Supabase did not confirm that the election was saved.");
-    }
-
-    setMessage(
-      messageId,
-      `Election saved successfully as ${data.status}.`,
-      "success"
-    );
-
+    setMessage(messageId, `Election saved successfully as ${data.status}.`, 'success');
     await loadDashboard();
   } catch (error) {
-    console.error("Election save failed:", error);
-
-    setMessage(
-      messageId,
-      error.message || "Election could not be saved.",
-      "error"
-    );
+    console.error('Election save failed:', error);
+    setMessage(messageId, error.message || 'Election could not be saved.', 'error');
   } finally {
-    saveButton.disabled = false;
-    saveButton.textContent = "Save Election";
+    button.disabled = false;
+    button.textContent = 'Save Election';
   }
 }
 function populatePositionSelect(){$('candidatePosition').innerHTML=positions.length?positions.map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join(''):'<option value="">No positions configured</option>';$('candidatePosition').disabled=!positions.length;$('addCandidateButton').disabled=!positions.length;}
