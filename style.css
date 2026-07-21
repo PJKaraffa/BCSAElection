@@ -194,33 +194,54 @@ button:disabled { cursor: not-allowed; opacity: .52; }
   .create-runoff-button { width: 100%; }
 }
 
-.file-drop-zone {
-  display: flex;
+/* Voter ballot candidate buttons */
+.candidate-button {
+  width: 100%;
+  min-height: 58px;
+  border: 2px solid #d4deeb;
+  border-radius: 11px;
+  padding: 14px 18px;
+  background: #f2f2f2;
+  color: var(--ink);
+  font-weight: 900;
+  text-align: center;
+  transition: background .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.candidate-button:hover {
+  border-color: #b7c6d8;
+  background: #e9eef5;
+  transform: translateY(-1px);
+}
+
+.candidate-button.selected {
+  background: var(--red);
+  border-color: var(--red);
+  color: #ffffff;
+  box-shadow: 0 8px 20px rgba(229, 9, 20, .28);
+}
+
+.candidate-button.selected:hover {
+  background: #c90711;
+  border-color: #c90711;
+}
+
+/* Larger ballot confirmation checkbox */
+.review-check {
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  min-height: 92px;
-  margin-top: 1rem;
-  padding: 1rem 1.1rem;
-  border: 2px dashed #c8d6ea;
-  border-radius: 16px;
-  background: #f8fbff;
+  gap: 14px;
   cursor: pointer;
-  transition: border-color .2s ease, background .2s ease, transform .2s ease;
 }
-.file-drop-zone:hover,
-.file-drop-zone:focus-visible,
-.file-drop-zone.drag-over {
-  border-color: #1f6df2;
-  background: #eef5ff;
-  outline: none;
+
+.review-check input[type="checkbox"] {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  margin: 0;
+  accent-color: var(--red);
+  cursor: pointer;
 }
-.file-drop-zone.drag-over { transform: translateY(-2px); }
-.file-drop-zone > div { display: grid; gap: .35rem; }
-.file-drop-zone span { color: #64748b; font-size: .95rem; }
-.import-actions { display: flex; align-items: center; gap: 1rem; margin-top: 1rem; flex-wrap: wrap; }
-.muted-text { color: #64748b; font-size: .92rem; }
-@media (max-width: 700px) {
-  .file-drop-zone { align-items: stretch; flex-direction: column; }
-  .file-drop-zone .secondary-button { width: 100%; }
+
+.review-check span {
+  line-height: 1.45;
 }
