@@ -76,9 +76,17 @@
       <section class="card">
         <h2>Import Eligible Member IDs</h2>
         <p>Upload a CSV with one column named <strong>member_id</strong>. IDs are stored exactly as uploaded and are used only to verify voting eligibility.</p>
-        <div class="inline-form">
-          <input id="memberCsv" type="file" accept=".csv,text/csv">
-          <button id="importMembersButton" class="primary-button" type="button">Import IDs</button>
+        <div id="memberDropZone" class="file-drop-zone" tabindex="0" role="button" aria-label="Choose or drop member CSV file">
+          <input id="memberCsv" type="file" accept=".csv,text/csv" hidden>
+          <div>
+            <strong>Choose or drop a CSV file</strong>
+            <span id="memberFileName">No file selected</span>
+          </div>
+          <button id="chooseMemberFileButton" class="secondary-button" type="button">Choose File</button>
+        </div>
+        <div class="import-actions">
+          <button id="importMembersButton" class="primary-button" type="button" disabled>Import IDs</button>
+          <span id="memberImportSummary" class="muted-text"></span>
         </div>
         <p id="memberImportMessage" class="message"></p>
       </section>
