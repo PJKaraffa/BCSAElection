@@ -13,8 +13,8 @@ document.addEventListener("DOMContentLoaded", initializeAdmin);
 async function initializeAdmin() {
   $("adminLoginButton").addEventListener("click", loginAdmin);
   $("logoutButton").addEventListener("click", logoutAdmin);
+  $("newElectionButton").addEventListener("click", beginNewElection);
   $("saveElectionButton").addEventListener("click", saveElection);
-  $("newElectionButton").addEventListener("click", createNewElection);
   $("importMembersButton").addEventListener("click", importMemberIds);
   $("addCandidateButton").addEventListener("click", addCandidate);
   $("refreshAdminButton").addEventListener("click", () => loadDashboard({ manual: true }));
@@ -157,75 +157,27 @@ function populateElectionForm() {
   $("electionEndInput").value = toLocalInput(election.ends_at);
 }
 
-async function createNewElection() {
-  const defaultTitle = `BCSA Executive Board Election ${new Date().getFullYear() + 1}`;
-  const title = prompt(
-    "Enter the title for the new election:",
-    defaultTitle
-  );
 
-  if (title === null) return;
+function beginNewElection() {
+  if (!confirm("Create a new regular election? Existing elections and results will remain unchanged.")) return;
 
-  const cleanTitle = title.trim();
-  if (!cleanTitle) {
-    alert("Enter an election title.");
-    return;
-  }
+  election = null;
+  positions = [];
+  latestMetrics = {};
 
-  const confirmed = confirm(
-    `Create a new election named:\n\n${cleanTitle}\n\n` +
-    "It will be created as a Draft with these offices:\n" +
-    "• President — select 1\n" +
-    "• Vice President — select 2\n" +
-    "• Treasurer — select 1\n" +
-    "• Secretary — select 1\n" +
-    "• Sergeant at Arms — select 2\n\n" +
-    "Existing elections and runoff results will not be changed."
-  );
+  $("electionNameInput").value = "BCSA Executive Board Election";
+  $("electionStatusInput").value = "draft";
 
-  if (!confirmed) return;
+  const now = new Date();
+  const end = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  $("electionStartInput").value = toLocalInput(now.toISOString());
+  $("electionEndInput").value = toLocalInput(end.toISOString());
 
-  const button = $("newElectionButton");
-  button.disabled = true;
-  button.textContent = "Creating…";
-
-  try {
-    const startsAt = new Date();
-    startsAt.setHours(8, 0, 0, 0);
-
-    const endsAt = new Date(startsAt);
-    endsAt.setDate(endsAt.getDate() + 7);
-    endsAt.setHours(20, 0, 0, 0);
-
-    const { data: newElectionId, error } = await supabaseClient.rpc(
-      "admin_save_election",
-      {
-        p_id: null,
-        p_title: cleanTitle,
-        p_status: "draft",
-        p_starts_at: startsAt.toISOString(),
-        p_ends_at: endsAt.toISOString()
-      }
-    );
-
-    if (error) throw error;
-
-    alert(
-      `New election created successfully.\n\n` +
-      `Election: ${cleanTitle}\n` +
-      `Election ID: ${newElectionId}\n` +
-      "Status: Draft\n\n" +
-      "All five standard offices have been added. You can now add candidates, import eligible IDs, adjust the dates, and open the election."
-    );
-
-    await loadDashboard();
-  } catch (error) {
-    alert(error.message || "Unable to create the new election.");
-    console.error(error);
-  } finally {
-    button.disabled = false;
-    button.textContent = "New Election";
-  }
+  populatePositionSelect();
+  renderCandidates();
+  renderMetrics({});
+  renderResults([]);
+  setMessage("electionSaveMessage", "Enter the election details, then click Save Election. The five standard offices will be created automatically.", "success");
 }
 
 async function saveElection() {
@@ -248,9 +200,9 @@ async function saveElection() {
     p_ends_at: endDate.toISOString()
   };
 
-  const { error } = await supabaseClient.rpc("admin_save_election", payload);
+  const { data: savedElectionId, error } = await supabaseClient.rpc("admin_save_election", payload);
   if (error) return setMessage("electionSaveMessage", error.message, "error");
-  setMessage("electionSaveMessage", "Election saved.", "success");
+  setMessage("electionSaveMessage", `Election saved successfully (ID ${savedElectionId}).`, "success");
   await loadDashboard();
 }
 
@@ -308,7 +260,8 @@ window.removeCandidate = removeCandidate;
 
 async function importMemberIds() {
   const file = $("memberCsv").files[0];
-  if (!file || !election) return setMessage("memberImportMessage", "Choose a CSV file first.", "error");
+  if (!election?.id) return setMessage("memberImportMessage", "Save the election before importing member IDs.", "error");
+  if (!file) return setMessage("memberImportMessage", "Choose a CSV file first.", "error");
 
   const text = await file.text();
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
@@ -321,7 +274,8 @@ async function importMemberIds() {
   });
 
   if (error) return setMessage("memberImportMessage", error.message, "error");
-  setMessage("memberImportMessage", `${data.imported} IDs imported.`, "success");
+  setMessage("memberImportMessage", `${data.imported} IDs imported${data.skipped ? `; ${data.skipped} duplicate or blank IDs skipped` : ""}.`, "success");
+  $("memberCsv").value = "";
   await loadDashboard();
 }
 
