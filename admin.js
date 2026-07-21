@@ -14,6 +14,7 @@ async function initializeAdmin() {
   $("adminLoginButton").addEventListener("click", loginAdmin);
   $("logoutButton").addEventListener("click", logoutAdmin);
   $("saveElectionButton").addEventListener("click", saveElection);
+  $("newElectionButton").addEventListener("click", createNewElection);
   $("importMembersButton").addEventListener("click", importMemberIds);
   $("addCandidateButton").addEventListener("click", addCandidate);
   $("refreshAdminButton").addEventListener("click", () => loadDashboard({ manual: true }));
@@ -154,6 +155,77 @@ function populateElectionForm() {
   $("electionStatusInput").value = election.status;
   $("electionStartInput").value = toLocalInput(election.starts_at);
   $("electionEndInput").value = toLocalInput(election.ends_at);
+}
+
+async function createNewElection() {
+  const defaultTitle = `BCSA Executive Board Election ${new Date().getFullYear() + 1}`;
+  const title = prompt(
+    "Enter the title for the new election:",
+    defaultTitle
+  );
+
+  if (title === null) return;
+
+  const cleanTitle = title.trim();
+  if (!cleanTitle) {
+    alert("Enter an election title.");
+    return;
+  }
+
+  const confirmed = confirm(
+    `Create a new election named:\n\n${cleanTitle}\n\n` +
+    "It will be created as a Draft with these offices:\n" +
+    "• President — select 1\n" +
+    "• Vice President — select 2\n" +
+    "• Treasurer — select 1\n" +
+    "• Secretary — select 1\n" +
+    "• Sergeant at Arms — select 2\n\n" +
+    "Existing elections and runoff results will not be changed."
+  );
+
+  if (!confirmed) return;
+
+  const button = $("newElectionButton");
+  button.disabled = true;
+  button.textContent = "Creating…";
+
+  try {
+    const startsAt = new Date();
+    startsAt.setHours(8, 0, 0, 0);
+
+    const endsAt = new Date(startsAt);
+    endsAt.setDate(endsAt.getDate() + 7);
+    endsAt.setHours(20, 0, 0, 0);
+
+    const { data: newElectionId, error } = await supabaseClient.rpc(
+      "admin_save_election",
+      {
+        p_id: null,
+        p_title: cleanTitle,
+        p_status: "draft",
+        p_starts_at: startsAt.toISOString(),
+        p_ends_at: endsAt.toISOString()
+      }
+    );
+
+    if (error) throw error;
+
+    alert(
+      `New election created successfully.\n\n` +
+      `Election: ${cleanTitle}\n` +
+      `Election ID: ${newElectionId}\n` +
+      "Status: Draft\n\n" +
+      "All five standard offices have been added. You can now add candidates, import eligible IDs, adjust the dates, and open the election."
+    );
+
+    await loadDashboard();
+  } catch (error) {
+    alert(error.message || "Unable to create the new election.");
+    console.error(error);
+  } finally {
+    button.disabled = false;
+    button.textContent = "New Election";
+  }
 }
 
 async function saveElection() {
