@@ -132,3 +132,38 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 @media (max-width: 420px) {
   .metrics-grid { grid-template-columns: 1fr; }
 }
+
+
+/* Tie handling for election results */
+.result-candidate.tie {
+  background: #fff8e6;
+  box-shadow: inset 4px 0 0 #d97706;
+}
+
+.result-candidate.tie .result-bar > div {
+  background: #f59e0b;
+}
+
+.tie-badge {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: #92400e;
+  background: #fef3c7;
+  font-size: .67rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .035em;
+}
+
+.tie-alert {
+  margin: 10px 0 14px;
+  padding: 12px 14px;
+  border: 1px solid #f3c66b;
+  border-radius: 10px;
+  background: #fff8e6;
+  color: #7c4300;
+  line-height: 1.45;
+}
