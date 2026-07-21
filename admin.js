@@ -16,7 +16,97 @@ async function loadDashboard(manual=false,liveOnly=false){ if(loading)return;loa
 function renderMetrics(){const eligible=Number(latestMetrics.eligible_count||0),voted=Number(latestMetrics.votes_cast||0),remaining=Math.max(eligible-voted,0),turnout=eligible?voted/eligible*100:0;$('eligibleCount').textContent=eligible;$('votesCastCount').textContent=voted;$('remainingCount').textContent=remaining;$('turnoutPercent').textContent=`${turnout.toFixed(1)}%`;$('adminElectionStatus').textContent=election?.status||'None';$('turnoutProgressText').textContent=`${voted} of ${eligible} eligible IDs have voted`;$('turnoutProgressBar').style.width=`${Math.min(turnout,100)}%`;$('liveElectionBadge').textContent=election?.status==='open'?'Election Open':election?.status==='closed'?'Election Closed':'Election Not Open';}
 function populateElectionForm(){if(!election)return;$('electionNameInput').value=election.title||'';$('electionStatusInput').value=election.status;$('electionStartInput').value=toLocalInput(election.starts_at);$('electionEndInput').value=toLocalInput(election.ends_at);}
 async function newElection(){const title=prompt('Enter the new election title:','BCSA Executive Board Election');if(!title)return;const {error}=await supabaseClient.rpc('admin_create_election',{p_title:title.trim()});if(error)return alert(error.message);await loadDashboard();setMessage('electionSaveMessage','New draft election created with all five offices.','success');}
-async function saveElection(){if(!election)return;const s=new Date($('electionStartInput').value),e=new Date($('electionEndInput').value);if(!s.getTime()||!e.getTime()||e<=s)return setMessage('electionSaveMessage','Enter valid dates; the end must be after the start.','error');const {error}=await supabaseClient.rpc('admin_save_election',{p_id:election.id,p_title:$('electionNameInput').value.trim(),p_status:$('electionStatusInput').value,p_starts_at:s.toISOString(),p_ends_at:e.toISOString()});if(error)return setMessage('electionSaveMessage',error.message,'error');setMessage('electionSaveMessage','Election saved.','success');await loadDashboard();}
+async function saveElection() {
+  const messageId = "electionSaveMessage";
+
+  if (!election?.id) {
+    setMessage(
+      messageId,
+      "No election is currently loaded. Click New Election first.",
+      "error"
+    );
+    return;
+  }
+
+  const title = $("electionNameInput").value.trim();
+  const status = $("electionStatusInput").value;
+  const startValue = $("electionStartInput").value;
+  const endValue = $("electionEndInput").value;
+
+  if (!title) {
+    setMessage(messageId, "Enter an election title.", "error");
+    return;
+  }
+
+  if (!startValue || !endValue) {
+    setMessage(messageId, "Enter both the start and end date.", "error");
+    return;
+  }
+
+  const startDate = new Date(startValue);
+  const endDate = new Date(endValue);
+
+  if (
+    Number.isNaN(startDate.getTime()) ||
+    Number.isNaN(endDate.getTime())
+  ) {
+    setMessage(messageId, "Enter valid election dates.", "error");
+    return;
+  }
+
+  if (endDate <= startDate) {
+    setMessage(
+      messageId,
+      "The election end date must be after the start date.",
+      "error"
+    );
+    return;
+  }
+
+  const saveButton = $("saveElectionButton");
+  saveButton.disabled = true;
+  saveButton.textContent = "Saving…";
+
+  try {
+    const { data, error } = await supabaseClient.rpc(
+      "admin_save_election",
+      {
+        p_id: Number(election.id),
+        p_title: title,
+        p_status: status,
+        p_starts_at: startDate.toISOString(),
+        p_ends_at: endDate.toISOString()
+      }
+    );
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data?.success) {
+      throw new Error("Supabase did not confirm that the election was saved.");
+    }
+
+    setMessage(
+      messageId,
+      `Election saved successfully as ${data.status}.`,
+      "success"
+    );
+
+    await loadDashboard();
+  } catch (error) {
+    console.error("Election save failed:", error);
+
+    setMessage(
+      messageId,
+      error.message || "Election could not be saved.",
+      "error"
+    );
+  } finally {
+    saveButton.disabled = false;
+    saveButton.textContent = "Save Election";
+  }
+}
 function populatePositionSelect(){$('candidatePosition').innerHTML=positions.length?positions.map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join(''):'<option value="">No positions configured</option>';$('candidatePosition').disabled=!positions.length;$('addCandidateButton').disabled=!positions.length;}
 async function addCandidate(){const name=$('candidateName').value.trim(),positionId=Number($('candidatePosition').value);if(!name||!positionId)return setMessage('candidateMessage','Enter a candidate and select an office.','error');const {error}=await supabaseClient.from('candidates').insert({election_id:election.id,position_id:positionId,name,display_order:Number($('candidateOrder').value)||1});if(error)return setMessage('candidateMessage',error.message,'error');$('candidateName').value='';await loadDashboard();}
 function renderCandidates(){const rows=positions.flatMap(p=>(p.candidates||[]).map(c=>({...c,position:p.name})));$('candidateList').innerHTML=rows.length?rows.map(c=>`<div class="admin-row"><strong>${escapeHtml(c.position)}</strong><span>${escapeHtml(c.name)}</span><button class="secondary-button" onclick="removeCandidate(${c.id})">Remove</button></div>`).join(''):'<p>No candidates added yet.</p>';}
