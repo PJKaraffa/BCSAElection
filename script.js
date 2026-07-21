@@ -55,14 +55,29 @@ function renderBallot() {
   updateSubmitState();
 }
 
-function toggleCandidate(positionId, candidateId) {
-  const p = ballotPositions.find(x => Number(x.id)===Number(positionId));
-  const set = selectedCandidates.get(positionId) || new Set();
-  if (set.has(candidateId)) set.delete(candidateId); else if (set.size < Number(p.max_selections)) set.add(candidateId);
-  selectedCandidates.set(positionId,set);
-  document.querySelectorAll(`[data-position-id="${positionId}"][data-candidate-id]`).forEach(b => b.classList.toggle("selected",set.has(Number(b.dataset.candidateId))));
-  $(`counter-${positionId}`).textContent = `${set.size} / ${p.max_selections}`;
-  updateSubmitState();
+function toggleCandidate(button, positionId, candidateId, maxSelections) {
+
+    if (!selected[positionId]) {
+        selected[positionId] = [];
+    }
+
+    const picks = selected[positionId];
+    const index = picks.indexOf(candidateId);
+
+    if (index >= 0) {
+        picks.splice(index, 1);
+        button.classList.remove("selected");
+    } else {
+
+        if (picks.length >= maxSelections) {
+            return;
+        }
+
+        picks.push(candidateId);
+        button.classList.add("selected");
+    }
+
+    updateCounters();
 }
 window.toggleCandidate=toggleCandidate;
 
