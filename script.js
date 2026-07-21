@@ -55,30 +55,54 @@ function renderBallot() {
   updateSubmitState();
 }
 
-function toggleCandidate(button, positionId, candidateId, maxSelections) {
+function toggleCandidate(positionId, candidateId) {
+  const position = ballotPositions.find(
+    p => Number(p.id) === Number(positionId)
+  );
 
-    if (!selected[positionId]) {
-        selected[positionId] = [];
+  if (!position) return;
+
+  const maxSelections = Number(position.max_selections);
+  const button = document.querySelector(
+    `.candidate-button[data-position-id="${positionId}"][data-candidate-id="${candidateId}"]`
+  );
+
+  if (!button) return;
+
+  if (!selectedCandidates.has(positionId)) {
+    selectedCandidates.set(positionId, new Set());
+  }
+
+  const picks = selectedCandidates.get(positionId);
+
+  if (picks.has(candidateId)) {
+    picks.delete(candidateId);
+    button.classList.remove("selected");
+  } else {
+    if (picks.size >= maxSelections) {
+      setMessage(
+        "submitMessage",
+        `You may select only ${maxSelections} candidate${maxSelections === 1 ? "" : "s"} for ${position.name}.`,
+        "error"
+      );
+      return;
     }
 
-    const picks = selected[positionId];
-    const index = picks.indexOf(candidateId);
+    picks.add(candidateId);
+    button.classList.add("selected");
+  }
 
-    if (index >= 0) {
-        picks.splice(index, 1);
-        button.classList.remove("selected");
-    } else {
+  const counter = $(`counter-${positionId}`);
 
-        if (picks.length >= maxSelections) {
-            return;
-        }
+  if (counter) {
+    counter.textContent = `${picks.size} / ${maxSelections}`;
+  }
 
-        picks.push(candidateId);
-        button.classList.add("selected");
-    }
-
-    updateCounters();
+  setMessage("submitMessage", "", "");
+  updateSubmitState();
 }
+
+window.toggleCandidate = toggleCandidate;
 window.toggleCandidate=toggleCandidate;
 
 function clearSelections(){ selectedCandidates.clear(); document.querySelectorAll('.candidate-button.selected').forEach(b=>b.classList.remove('selected')); ballotPositions.forEach(p=>$(`counter-${p.id}`).textContent=`0 / ${p.max_selections}`); $("confirmReview").checked=false; updateSubmitState(); }
