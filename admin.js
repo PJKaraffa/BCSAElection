@@ -1,4 +1,4 @@
-let adminUser=null,election=null,positions=[],latestMetrics={},timer=null,loading=false;
+let adminUser=null,election=null,positions=[],latestMetrics={},timer=null,loading=false,selectedMemberFile=null,importingMembers=false;
 const $=id=>document.getElementById(id);
 document.addEventListener('DOMContentLoaded',initializeAdmin);
 async function initializeAdmin(){
@@ -6,6 +6,7 @@ async function initializeAdmin(){
   $('newElectionButton').addEventListener('click',newElection); $('saveElectionButton').addEventListener('click',saveElection);
   $('importMembersButton').addEventListener('click',importMemberIds); $('addCandidateButton').addEventListener('click',addCandidate);
   $('refreshAdminButton').addEventListener('click',()=>loadDashboard(true));
+  configureMemberFileImport();
   const {data:{session}}=await supabaseClient.auth.getSession(); if(session) await openAdminApp(session.user);
 }
 async function loginAdmin(){ const {data,error}=await supabaseClient.auth.signInWithPassword({email:$('adminEmail').value.trim(),password:$('adminPassword').value}); if(error)return setMessage('adminLoginMessage',error.message,'error'); await openAdminApp(data.user); }
@@ -20,7 +21,74 @@ function populatePositionSelect(){$('candidatePosition').innerHTML=positions.len
 async function addCandidate(){const name=$('candidateName').value.trim(),positionId=Number($('candidatePosition').value);if(!name||!positionId)return setMessage('candidateMessage','Enter a candidate and select an office.','error');const {error}=await supabaseClient.from('candidates').insert({election_id:election.id,position_id:positionId,name,display_order:Number($('candidateOrder').value)||1});if(error)return setMessage('candidateMessage',error.message,'error');$('candidateName').value='';await loadDashboard();}
 function renderCandidates(){const rows=positions.flatMap(p=>(p.candidates||[]).map(c=>({...c,position:p.name})));$('candidateList').innerHTML=rows.length?rows.map(c=>`<div class="admin-row"><strong>${escapeHtml(c.position)}</strong><span>${escapeHtml(c.name)}</span><button class="secondary-button" onclick="removeCandidate(${c.id})">Remove</button></div>`).join(''):'<p>No candidates added yet.</p>';}
 async function removeCandidate(id){if(!confirm('Remove this candidate?'))return;const {error}=await supabaseClient.from('candidates').delete().eq('id',id);if(error)return alert(error.message);await loadDashboard();}window.removeCandidate=removeCandidate;
-async function importMemberIds(){const file=$('memberCsv').files[0];if(!file||!election)return setMessage('memberImportMessage','Choose a CSV file first.','error');const lines=(await file.text()).split(/\r?\n/).map(x=>x.trim()).filter(Boolean);const ids=(lines[0]?.toLowerCase().includes('member_id')?lines.slice(1):lines).map(x=>x.split(',')[0].replace(/^"|"$/g,'').trim()).filter(Boolean);const {data,error}=await supabaseClient.rpc('admin_import_member_ids',{p_election_id:election.id,p_member_ids:[...new Set(ids)]});if(error)return setMessage('memberImportMessage',error.message,'error');setMessage('memberImportMessage',`${data.imported} new IDs imported. ${ids.length-data.imported} duplicates skipped.`,'success');await loadDashboard();}
+function configureMemberFileImport(){
+  const input=$('memberCsv'),dropZone=$('memberDropZone'),chooseButton=$('chooseMemberFileButton');
+  if(!input||!dropZone||!chooseButton)return;
+  chooseButton.addEventListener('click',event=>{event.stopPropagation();input.click();});
+  dropZone.addEventListener('click',event=>{if(event.target!==chooseButton)input.click();});
+  dropZone.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();input.click();}});
+  input.addEventListener('change',()=>setSelectedMemberFile(input.files?.[0]||null));
+  ['dragenter','dragover'].forEach(name=>dropZone.addEventListener(name,event=>{event.preventDefault();dropZone.classList.add('drag-over');}));
+  ['dragleave','drop'].forEach(name=>dropZone.addEventListener(name,event=>{event.preventDefault();dropZone.classList.remove('drag-over');}));
+  dropZone.addEventListener('drop',event=>{
+    const file=event.dataTransfer?.files?.[0]||null;
+    if(file)setSelectedMemberFile(file);
+  });
+}
+function setSelectedMemberFile(file){
+  selectedMemberFile=file;
+  const name=$('memberFileName'),button=$('importMembersButton'),summary=$('memberImportSummary');
+  if(name)name.textContent=file?`${file.name} · ${formatFileSize(file.size)}`:'No file selected';
+  if(button)button.disabled=!file||importingMembers;
+  if(summary)summary.textContent='';
+  setMessage('memberImportMessage','','');
+}
+function formatFileSize(bytes){if(bytes<1024)return`${bytes} B`;if(bytes<1048576)return`${(bytes/1024).toFixed(1)} KB`;return`${(bytes/1048576).toFixed(1)} MB`;}
+function parseMemberCsv(text){
+  const rows=text.replace(/^\uFEFF/,'').split(/\r?\n/).map(row=>row.trim()).filter(Boolean);
+  if(!rows.length)throw new Error('The CSV file is empty.');
+  const firstCells=parseCsvRow(rows[0]);
+  const memberColumn=firstCells.findIndex(cell=>cell.trim().toLowerCase()==='member_id');
+  const hasHeader=memberColumn>=0;
+  const columnIndex=hasHeader?memberColumn:0;
+  const dataRows=hasHeader?rows.slice(1):rows;
+  const ids=dataRows.map(row=>parseCsvRow(row)[columnIndex]?.trim()||'').filter(Boolean);
+  const unique=[...new Set(ids)];
+  if(!unique.length)throw new Error('No member IDs were found. Use a column named member_id.');
+  return{ids:unique,totalRows:ids.length,duplicates:ids.length-unique.length};
+}
+function parseCsvRow(row){
+  const cells=[];let value='',quoted=false;
+  for(let i=0;i<row.length;i++){
+    const char=row[i];
+    if(char==='"'){
+      if(quoted&&row[i+1]==='"'){value+='"';i++;}else quoted=!quoted;
+    }else if(char===','&&!quoted){cells.push(value);value='';}
+    else value+=char;
+  }
+  cells.push(value);return cells;
+}
+async function importMemberIds(){
+  if(importingMembers)return;
+  const file=selectedMemberFile||$('memberCsv')?.files?.[0]||null;
+  if(!election)return setMessage('memberImportMessage','Create or load an election before importing IDs.','error');
+  if(!file)return setMessage('memberImportMessage','Choose a CSV file first.','error');
+  importingMembers=true;
+  const button=$('importMembersButton');button.disabled=true;button.textContent='Importing…';
+  try{
+    const parsed=parseMemberCsv(await file.text());
+    const {data,error}=await supabaseClient.rpc('admin_import_member_ids',{p_election_id:Number(election.id),p_member_ids:parsed.ids});
+    if(error)throw error;
+    const imported=Number(data?.imported??0),existing=Number(data?.existing??Math.max(parsed.ids.length-imported,0));
+    setMessage('memberImportMessage',`Import complete: ${imported} new ID${imported===1?'':'s'} added.`,'success');
+    $('memberImportSummary').textContent=`${parsed.ids.length} unique IDs read · ${existing} already existed · ${parsed.duplicates} duplicate CSV rows removed`;
+    await loadDashboard();
+  }catch(error){
+    console.error(error);setMessage('memberImportMessage',error.message||'Unable to import the CSV file.','error');
+  }finally{
+    importingMembers=false;button.textContent='Import IDs';button.disabled=!selectedMemberFile;
+  }
+}
 function renderResults(results){if(!election){$('resultsArea').innerHTML='<p>Create an election to display results.</p>';return;}const groups=results.reduce((a,r)=>((a[r.position_name]||=[]).push(r),a),{}),closed=election.status==='closed',total=Number(latestMetrics.votes_cast||0);$('resultsArea').innerHTML=Object.entries(groups).map(([name,raw])=>{const rows=[...raw].sort((a,b)=>b.vote_count-a.vote_count||a.display_order-b.display_order),seats=Number(rows[0]?.max_selections||1),cut=Number(rows[seats-1]?.vote_count||0),above=rows.filter(r=>r.vote_count>cut),at=rows.filter(r=>r.vote_count===cut),remaining=seats-above.length,tie=cut>0&&at.length>remaining,posId=rows[0]?.position_id;return `<section class="result-group"><div class="result-group-heading"><h3>${escapeHtml(name)}</h3><span>${seats} seat${seats===1?'':'s'}</span></div>${tie?`<div class="tie-alert"><div><strong>Tie detected:</strong> ${at.length} candidates are tied for ${remaining} remaining seat${remaining===1?'':'s'}.</div>${closed?`<button class="create-runoff-button" onclick="createRunoffElection(${election.id},${posId})">Create Runoff Election</button>`:''}</div>`:''}${rows.map((r,i)=>{const votes=Number(r.vote_count),pct=total?votes/total*100:0,isTie=tie&&votes===cut,isLeader=votes>0&&(votes>cut||(!tie&&i<seats));return `<div class="result-candidate ${isTie?'tie':isLeader?'leader':''}"><div class="result-candidate-topline"><strong>${escapeHtml(r.candidate_name)}</strong><span>${isTie?(closed?'Tie — runoff needed':'Tied'):isLeader?(closed?'Winner':'Leading'):''} &nbsp; ${votes} vote${votes===1?'':'s'} · ${pct.toFixed(1)}%</span></div><div class="result-bar"><div style="width:${Math.min(pct,100)}%"></div></div></div>`}).join('')}</section>`}).join('')||'<p>No candidates or results yet.</p>';}
 async function createRunoffElection(eid,pid){if(!confirm('Create a runoff for this tied office?'))return;const {data,error}=await supabaseClient.rpc('admin_create_runoff_election',{p_source_election_id:eid,p_position_id:pid});if(error)return alert(error.message);alert(`Runoff created: ${data.title}\nEligible IDs copied: ${data.eligible_count}`);await loadDashboard();}window.createRunoffElection=createRunoffElection;
 function toLocalInput(v){if(!v)return'';const d=new Date(v),o=d.getTimezoneOffset();return new Date(d.getTime()-o*60000).toISOString().slice(0,16);}
