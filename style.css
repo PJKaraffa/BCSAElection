@@ -167,3 +167,29 @@ button:disabled { cursor: not-allowed; opacity: .52; }
   color: #7c4300;
   line-height: 1.45;
 }
+
+
+/* Runoff election controls */
+.tie-alert {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.tie-alert-copy {
+  flex: 1 1 480px;
+  line-height: 1.55;
+}
+.create-runoff-button {
+  background: #b45309;
+  color: #fff;
+  border: 0;
+  white-space: nowrap;
+  box-shadow: 0 8px 18px rgba(180, 83, 9, .2);
+}
+.create-runoff-button:hover { background: #92400e; }
+.create-runoff-button:disabled { opacity: .65; cursor: wait; }
+@media (max-width: 620px) {
+  .create-runoff-button { width: 100%; }
+}
