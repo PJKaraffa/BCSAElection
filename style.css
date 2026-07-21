@@ -193,23 +193,3 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 @media (max-width: 620px) {
   .create-runoff-button { width: 100%; }
 }
-
-
-.election-action-buttons {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-@media (max-width: 700px) {
-  .election-action-buttons {
-    width: 100%;
-    justify-content: stretch;
-  }
-
-  .election-action-buttons button {
-    flex: 1 1 160px;
-  }
-}
